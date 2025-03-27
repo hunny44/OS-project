@@ -1,0 +1,185 @@
+# svdf_gui.py
+import tkinter as tk
+from tkinter import ttk
+import ttkbootstrap as tb
+from datetime import datetime
+from svdf_detector import VulnerabilityDetector
+from svdf_simulator import AttackSimulator
+import threading
+
+class SVDFGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Security Vulnerability Detection Framework")
+        self.root.geometry("900x600")
+        
+        # Setup detector and simulator
+        self.detector = VulnerabilityDetector()
+        self.simulator = AttackSimulator()
+        
+        # Create notebook (tabs)
+        self.notebook = tb.Notebook(root, bootstyle="info")
+        self.notebook.pack(fill='both', expand=True)
+        
+        # Create tabs
+        self.create_dashboard_tab()
+        self.create_detection_tab()
+        self.create_simulation_tab()
+        self.create_logs_tab()
+        
+        # Start monitoring thread
+        self.monitor_thread = threading.Thread(target=self.start_monitoring, daemon=True)
+        self.monitor_thread.start()
+    
+    def create_dashboard_tab(self):
+        tab = tb.Frame(self.notebook)
+        self.notebook.add(tab, text="Dashboard")
+        
+        # Header
+        header = tb.Label(tab, text="Security Vulnerability Detection Framework", 
+                         font=('Helvetica', 16, 'bold'), bootstyle="info")
+        header.pack(pady=10)
+        
+        # System info frame
+        sys_frame = tb.LabelFrame(tab, text="System Information", bootstyle="info")
+        sys_frame.pack(fill='x', padx=10, pady=5)
+        
+        self.os_label = tb.Label(sys_frame, text="OS: Windows")
+        self.os_label.pack(anchor='w')
+        
+        self.status_label = tb.Label(sys_frame, text="Status: Monitoring active", bootstyle="success")
+        self.status_label.pack(anchor='w')
+        
+        # Quick actions frame
+        action_frame = tb.LabelFrame(tab, text="Quick Actions", bootstyle="info")
+        action_frame.pack(fill='x', padx=10, pady=5)
+        
+        scan_btn = tb.Button(action_frame, text="Run Full Scan", 
+                           command=self.run_full_scan, bootstyle="success")
+        scan_btn.pack(side='left', padx=5)
+        
+        stop_btn = tb.Button(action_frame, text="Stop Monitoring", 
+                           command=self.stop_monitoring, bootstyle="danger")
+        stop_btn.pack(side='left', padx=5)
+    
+    def create_detection_tab(self):
+        tab = tb.Frame(self.notebook)
+        self.notebook.add(tab, text="Vulnerability Detection")
+        
+        # Detection controls
+        ctrl_frame = tb.Frame(tab)
+        ctrl_frame.pack(fill='x', padx=10, pady=5)
+        
+        detect_btn = tb.Button(ctrl_frame, text="Detect Now", 
+                             command=self.run_detection, bootstyle="info")
+        detect_btn.pack(side='left', padx=5)
+        
+        # Results treeview
+        self.detection_tree = tb.Treeview(tab, columns=('Type', 'Severity', 'Details'), show='headings')
+        self.detection_tree.heading('Type', text='Vulnerability Type')
+        self.detection_tree.heading('Severity', text='Severity')
+        self.detection_tree.heading('Details', text='Details')
+        self.detection_tree.pack(fill='both', expand=True, padx=10, pady=5)
+    
+    def create_simulation_tab(self):
+        tab = tb.Frame(self.notebook)
+        self.notebook.add(tab, text="Attack Simulation")
+        
+        # Simulation controls
+        sim_frame = tb.LabelFrame(tab, text="Simulate Attacks", bootstyle="info")
+        sim_frame.pack(fill='x', padx=10, pady=5)
+        
+        # Attack selection
+        attack_label = tb.Label(sim_frame, text="Select Attack:")
+        attack_label.pack(anchor='w')
+        
+        self.attack_var = tb.StringVar()
+        attacks = ['Buffer Overflow', 'DLL Injection', 'Registry Modification', 'Process Hollowing']
+        attack_menu = tb.OptionMenu(sim_frame, self.attack_var, *attacks)
+        attack_menu.pack(fill='x', pady=5)
+        
+        # Run simulation button
+        sim_btn = tb.Button(sim_frame, text="Run Simulation", 
+                           command=self.run_simulation, bootstyle="warning")
+        sim_btn.pack(pady=5)
+        
+        # Results frame
+        result_frame = tb.LabelFrame(tab, text="Simulation Results", bootstyle="info")
+        result_frame.pack(fill='both', expand=True, padx=10, pady=5)
+        
+        self.sim_result = tb.Text(result_frame, height=10)
+        self.sim_result.pack(fill='both', expand=True)
+    
+    def create_logs_tab(self):
+        tab = tb.Frame(self.notebook)
+        self.notebook.add(tab, text="Logs")
+        
+        self.log_text = tb.Text(tab, wrap='word')
+        self.log_text.pack(fill='both', expand=True, padx=10, pady=5)
+        
+        clear_btn = tb.Button(tab, text="Clear Logs", 
+                            command=self.clear_logs, bootstyle="danger")
+        clear_btn.pack(side='right', padx=10, pady=5)
+    
+    def run_full_scan(self):
+        self.log("Starting full system scan...")
+        results = self.detector.full_scan()
+        self.update_detection_results(results)
+    
+    def run_detection(self):
+        self.log("Running vulnerability detection...")
+        results = self.detector.detect_vulnerabilities()
+        self.update_detection_results(results)
+    
+    def run_simulation(self):
+        attack = self.attack_var.get()
+        if not attack:
+            self.log("Please select an attack type", "warning")
+            return
+            
+        self.log(f"Simulating {attack} attack...")
+        result = self.simulator.simulate(attack)
+        self.sim_result.insert('end', f"{attack} Simulation Results:\n{result}\n\n")
+        self.log(f"Simulation complete: {attack}")
+    
+    def update_detection_results(self, results):
+        self.detection_tree.delete(*self.detection_tree.get_children())
+        for result in results:
+            self.detection_tree.insert('', 'end', values=(
+                result['type'], 
+                result['severity'], 
+                result['description']
+            ))
+    
+    def start_monitoring(self):
+        self.log("Starting background monitoring...")
+        while True:
+            results = self.detector.monitor()
+            if results:
+                self.update_detection_results(results)
+                for result in results:
+                    self.log(f"Detected: {result['type']} - {result['description']}", "danger")
+            self.root.update()
+            time.sleep(10)
+    
+    def stop_monitoring(self):
+        self.log("Monitoring stopped", "warning")
+        self.status_label.config(text="Status: Monitoring stopped", bootstyle="danger")
+    
+    def log(self, message, style="info"):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.log_text.insert('end', f"[{timestamp}] {message}\n")
+        if style == "danger":
+            self.log_text.tag_add('danger', 'end-1c linestart', 'end-1c lineend')
+            self.log_text.tag_config('danger', foreground='red')
+        elif style == "warning":
+            self.log_text.tag_add('warning', 'end-1c linestart', 'end-1c lineend')
+            self.log_text.tag_config('warning', foreground='orange')
+    
+    def clear_logs(self):
+        self.log_text.delete('1.0', 'end')
+
+if __name__ == "__main__":
+    root = tb.Window(themename="superhero")
+    app = SVDFGUI(root)
+    root.mainloop()
